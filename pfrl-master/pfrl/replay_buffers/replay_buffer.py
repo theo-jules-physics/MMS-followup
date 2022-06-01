@@ -30,17 +30,8 @@ class ReplayBuffer(replay_buffer.AbstractReplayBuffer):
             lambda: collections.deque([], maxlen=num_steps)
         )
 
-    def append(
-        self,
-        state,
-        action,
-        reward,
-        next_state=None,
-        next_action=None,
-        is_state_terminal=False,
-        env_id=0,
-        **kwargs
-    ):
+    def append(self,state,action,reward,next_state=None,next_action=None,
+               is_state_terminal=False,env_id=0,**kwargs):
         last_n_transitions = self.last_n_transitions[env_id]
         experience = dict(
             state=state,
