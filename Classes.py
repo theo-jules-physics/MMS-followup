@@ -11,14 +11,16 @@ import gym_systmemoire.envs
 import pandas as pd
 import plotly.graph_objects as go
 import Config_env
+import networks as nets
 
-assert torch.cuda.is_available()
-device = torch.device('cuda:0')
+# assert torch.cuda.is_available()
+device = torch.device('cpu')
 
 class Train():
-    def __init__(self, seed, put_seed, gpu, env_name, gamma, rb_size, tau, replay_start_size, minibatch_size, steps, eval_n_episodes,
-                 eval_interval, train_max_episode_len, path_to_save, path_for_loading, dirname_to_save, dirname_for_loading, tar_act_noise, threshold=None, noise=None, scheduler=None,
-                 automatically_stop=False, success_threshold=0.95, save_force_signal=False, wrong_keys=True, nb_of_neurons_layer_1=400, nb_of_neurons_layer_2=300):
+    def __init__(self, exp_dir, seed, put_seed, gpu, env_name, gamma, rb_size, tau, replay_start_size, minibatch_size, steps, eval_n_episodes, 
+                 eval_interval, train_max_episode_len, tar_act_noise, threshold=None, noise=None, scheduler=None, automatically_stop=False,
+                 success_threshold=0.95, save_force_signal=False, wrong_keys=True, int_layers = [400, 300]):
+        self.exp_dir = exp_dir
         self.seed = seed
         self.put_seed = put_seed
         self.gpu = gpu
@@ -32,10 +34,6 @@ class Train():
         self.eval_n_episodes = eval_n_episodes
         self.eval_interval = eval_interval
         self.train_max_episode_len = train_max_episode_len
-        self.path_to_save = path_to_save
-        self.path_for_loading = path_for_loading
-        self.dirname_to_save = dirname_to_save
-        self.dirname_for_loading = dirname_for_loading
         self.tar_act_noise = tar_act_noise
         self.threshold = threshold
         self.noise = noise
@@ -44,8 +42,7 @@ class Train():
         self.success_threshold = success_threshold
         self.save_force_signal = save_force_signal
         self.wrong_keys = wrong_keys
-        self.nb_of_neurons_layer_1 = nb_of_neurons_layer_1
-        self.nb_of_neurons_layer_2 = nb_of_neurons_layer_2
+        self.int_layers = int_layers
 
     def make_env(self, test):
         env = gym.make(self.env_name)
@@ -74,61 +71,14 @@ class Train():
 
         obs_size = obs_space.low.size
         action_size = action_space.low.size
-
-        class Mul(nn.Module):
-            def __init__(self):
-                super(Mul, self).__init__()
-                self.threshold = torch.tensor(env.action_space.high[0])
-
-            def forward(self, x):
-                x = x * self.threshold
-                return x
-
-        class Policy(nn.Module):
-            def __init__(self, nb_of_neurons_layer_1, nb_of_neurons_layer_2):
-                super(Policy, self).__init__()
-                self.nb_of_neurons_layer_1 = nb_of_neurons_layer_1
-                self.nb_of_neurons_layer_2 = nb_of_neurons_layer_2
-                self.fc1_policy = nn.Linear(obs_size, self.nb_of_neurons_layer_1)
-                self.fc2_policy = nn.Linear(self.nb_of_neurons_layer_1, self.nb_of_neurons_layer_2)
-                self.fc3_policy = nn.Linear(self.nb_of_neurons_layer_2, action_size)
-                self.policy_deter = pfrl.policies.DeterministicHead()
-
-                self.act1_policy = nn.ReLU()
-                self.act2_policy = nn.Tanh()
-                self.mul = Mul()
-
-            def forward(self, x):
-                x = self.act1_policy(self.fc1_policy(x))
-                x = self.act1_policy(self.fc2_policy(x))
-                x = self.act2_policy(self.fc3_policy(x))
-                x = self.mul(x)
-                x = self.policy_deter(x)
-                return x
-
-        class Qfunc(nn.Module):
-            def __init__(self, nb_of_neurons_layer_1, nb_of_neurons_layer_2):
-                super(Qfunc, self).__init__()
-                self.nb_of_neurons_layer_1 = nb_of_neurons_layer_1
-                self.nb_of_neurons_layer_2 = nb_of_neurons_layer_2
-                self.concat = pfrl.nn.ConcatObsAndAction()
-                self.fc1_qfunc = nn.Linear(obs_size + action_size, self.nb_of_neurons_layer_1)
-                self.fc2_qfunc = nn.Linear(self.nb_of_neurons_layer_1, self.nb_of_neurons_layer_2)
-                self.fc3_qfunc = nn.Linear(self.nb_of_neurons_layer_2, 1)
-
-                self.act1_qfunc = nn.ReLU()
-
-            def forward(self, x):
-                x = self.concat(x)
-                x = self.act1_qfunc(self.fc1_qfunc(x))
-                x = self.act1_qfunc(self.fc2_qfunc(x))
-                x = self.fc3_qfunc(x)
-                return x
-
-        policy = Policy(self.nb_of_neurons_layer_1, self.nb_of_neurons_layer_2)
-        q_func_1 = Qfunc(self.nb_of_neurons_layer_1, self.nb_of_neurons_layer_2)
-        q_func_2 = Qfunc(self.nb_of_neurons_layer_1, self.nb_of_neurons_layer_2)
-
+        
+        shape_policy = [obs_size] + self.int_layers + [action_size]
+        shape_qfunc = [obs_size+action_size] + self.int_layers + [1]
+        
+        policy = nets.policy(shape_qfunc, env.action_space.high[0])
+        q_func_1 = nets.qfunc(shape_qfunc)
+        q_func_2 = nets.qfunc(shape_qfunc)
+        
         policy_optimizer = torch.optim.Adam(policy.parameters())
         q_func_1_optimizer = torch.optim.Adam(q_func_1.parameters())
         q_func_2_optimizer = torch.optim.Adam(q_func_2.parameters())
@@ -164,35 +114,6 @@ class Train():
             target_policy_smoothing_func=target_policy_smoothing_func,
         )
 
-        if self.dirname_for_loading is not None and self.wrong_keys==True:
-            policy_weights = torch.load(os.path.join(self.path_for_loading, './{}/best/policy.pt'.format(self.dirname_for_loading)))
-            q_func_1_weights = torch.load(os.path.join(self.path_for_loading, './{}/best/q_func1.pt'.format(self.dirname_for_loading)))
-            q_func_2_weights = torch.load(os.path.join(self.path_for_loading, './{}/best/q_func2.pt'.format(self.dirname_for_loading)))
-            with torch.no_grad():
-                policy.fc1_policy.weight.copy_(policy_weights['0.weight'])
-                policy.fc1_policy.bias.copy_(policy_weights['0.bias'])
-                policy.fc2_policy.weight.copy_(policy_weights['2.weight'])
-                policy.fc2_policy.bias.copy_(policy_weights['2.bias'])
-                policy.fc3_policy.weight.copy_(policy_weights['4.weight'])
-                policy.fc3_policy.bias.copy_(policy_weights['4.bias'])
-
-                q_func_1.fc1_qfunc.weight.copy_(q_func_1_weights['1.weight'])
-                q_func_1.fc1_qfunc.bias.copy_(q_func_1_weights['1.bias'])
-                q_func_1.fc2_qfunc.weight.copy_(q_func_1_weights['3.weight'])
-                q_func_1.fc2_qfunc.bias.copy_(q_func_1_weights['3.bias'])
-                q_func_1.fc3_qfunc.weight.copy_(q_func_1_weights['5.weight'])
-                q_func_1.fc3_qfunc.bias.copy_(q_func_1_weights['5.bias'])
-
-                q_func_2.fc1_qfunc.weight.copy_(q_func_2_weights['1.weight'])
-                q_func_2.fc1_qfunc.bias.copy_(q_func_2_weights['1.bias'])
-                q_func_2.fc2_qfunc.weight.copy_(q_func_2_weights['3.weight'])
-                q_func_2.fc2_qfunc.bias.copy_(q_func_2_weights['3.bias'])
-                q_func_2.fc3_qfunc.weight.copy_(q_func_2_weights['5.weight'])
-                q_func_2.fc3_qfunc.bias.copy_(q_func_2_weights['5.bias'])
-
-        elif self.dirname_for_loading is not None and self.wrong_keys==False:
-            agent.load(os.path.join(self.path_for_loading, './{}/best'.format(self.dirname_for_loading)))
-
         eval_env = self.make_env(test=True)
 
         experiments.train_agent_with_evaluation(agent=agent,
@@ -203,13 +124,7 @@ class Train():
                                                 eval_n_episodes=self.eval_n_episodes,
                                                 eval_interval=self.eval_interval,
                                                 train_max_episode_len=self.train_max_episode_len,
-                                                outdir=os.path.join(self.path_to_save, './{}'.format(self.dirname_to_save)),
-                                                threshold=self.threshold,
-                                                noise=self.noise,
-                                                scheduler=self.scheduler,
-                                                automatically_stop=self.automatically_stop,
-                                                success_threshold=self.success_threshold,
-                                                save_force_signal=self.save_force_signal,
+                                                outdir=self.exp_dir,
                                                 )
         return agent, eval_env
 

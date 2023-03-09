@@ -1,5 +1,0 @@
-name: pfrl
-type: sphinx
-base: docs
-python:
-    setup_py_install: true

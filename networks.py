@@ -21,12 +21,14 @@ def simple_mlp(shape, activation=nn.ReLU(), bias=True):
 
 
 class policy(nn.Module):
-    def __init__(self, shape, threshold):
+    def __init__(self, shape, amplitude):
         super(policy, self).__init__()
         self.model = simple_mlp(shape)
         self.tanh_act = nn.Tanh()
+        self.amplitude = amplitude
+        
     def forward(self, x):
-        return self.tanh_act(self.model(x)) * self.threshold
+        return self.tanh_act(self.model(x)) * self.amplitude
 
 class qfunc(nn.Module):
     def __init__(self, shape):
