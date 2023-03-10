@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = empty-project-type
-recent_files = ['Main.py', 'Training.py', 'Config_env.py', 'Functions.py', 'networks.py', 'setup.py', 'Classes.py', 'Train_phase.py']
+recent_files = ['gym_systmemoire\\envs\\Env_Spring.py', 'utils\\networks.py', 'utils\\general.py', 'Classes.py', 'gym_systmemoire\\envs\\Function.py']
 
 [main]
 version = 0.2.0

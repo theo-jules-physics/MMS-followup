@@ -4,21 +4,6 @@ from scipy import integrate
 from torchdiffeq import odeint_adjoint
 import matplotlib.pyplot as plt
 
-
-def belleFigure(ax1, ax2, nfigure=None):
-    fig = plt.figure(nfigure, constrained_layout=True)
-    ax = fig.add_subplot(1, 1, 1)
-    ax.set_xlabel(ax1, fontsize=24)
-    ax.set_ylabel(ax2, fontsize=24)
-    ax.tick_params(axis='both', which='major', labelsize=18, width=1)
-    for tick in ax.xaxis.get_ticklabels():
-        tick.set_weight('bold')
-    for tick in ax.yaxis.get_ticklabels():
-        tick.set_weight('bold')
-    plt.tight_layout()
-    return fig, ax
-
-
 def plot_paysage(func, val_lim, x_name, y_name, n=100, marq='.-'):
     # Returns the landscape of func between the limit values val_lim with n points.
     # x_name and y_name give the name of the x and y axes. marq is the marker type.
@@ -58,9 +43,14 @@ class Ressort():
         self.x_e = np.asarray(x_e)
         self.extr_x = np.asarray(extr_x)
         self.extr_v = np.asarray(extr_v)
+        self.__get_x_s()
         self.coeff = poly.polynomial.polyfromroots(x_e)
         self.polyn_force = poly.polynomial.Polynomial(self.coeff)
         self.polyn_energy = self.polyn_force.integ()
+        
+    def __get_x_s(self):
+        nb_pos_stable = int((len(self.x_e)-1)/2)
+        self.x_s = [self.x_e[2*k] for k in range(nb_pos_stable)]
 
     def force(self, x):
         # Returns the force associated with a spring of length x

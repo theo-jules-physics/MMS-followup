@@ -30,7 +30,7 @@ exp['1M-v0'] = {'masse': np.array([1.]), 'max_f': 1, 'system': [Ressort(88.7, [0
 
 exp['2M-v0'] = {'max_f': 1, 'system': [Ressort(88.7, [0.040, 0.080, 0.100],[0, 1.5], [-1, 1]),
                                        Ressort(88.7, [0.030, 0.060, 0.105],[0, 1.5], [-1, 1])],
-                'nb_pos_eq': 3, 'c': 2., 'dt': 0.1, 'ini_pos': None, 'limit_reset': [0.2,0.1], 'goal_state': [None, None],
+                'nb_pos_ eq':3, 'c': 2., 'dt': 0.1, 'ini_pos': None, 'limit_reset': [0.2,0.1], 'goal_state': [None, None],
                 'recup_traj': True, 'cond_success': [0.005, 0.01], 'reward_sucess': 50, 'pen_coeff': [1, 0.5]}
 
 ######### 3 masses ##########
@@ -50,8 +50,3 @@ exp['4M-v0'] = {'masse': np.array([1., 1., 1., 1.]), 'max_f': 1, 'system': [Ress
                                        Ressort(88.7, [0.055, 0.110, 0.165],[0, 1.5], [-1, 1])],
                 'nb_pos_eq': 3, 'c': 2., 'dt': 0.1, 'ini_pos': None, 'limit_reset': [0.2, 0.1], 'goal_state': [None, None, None, None],
                 'recup_traj': True, 'cond_success': [0.005, 0.01], 'reward_sucess': 50, 'pen_coeff': [1, 0.5]}
-
-
-
-
-

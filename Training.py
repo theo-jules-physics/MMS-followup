@@ -1,8 +1,6 @@
 import numpy as np
 import logging
 import os
-import pfrl
-from pfrl import experiments, explorers, replay_buffers, utils
 import torch
 from torch import nn
 import gym

@@ -1,11 +1,11 @@
 import torch
 from torch import nn
-
+        
 def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
-
+        
 def simple_mlp(shape, activation=nn.ReLU(), bias=True):
     # Function that produces a FC network with specified sizes (from input to output) and 
     # non linear activation.
@@ -19,21 +19,26 @@ def simple_mlp(shape, activation=nn.ReLU(), bias=True):
     model.apply(init_weights)
     return model
 
-
-class policy(nn.Module):
-    def __init__(self, shape, amplitude):
-        super(policy, self).__init__()
+class Policy(nn.Module):
+    def __init__(self, shape, threshold):
+        super(Policy, self).__init__()
         self.model = simple_mlp(shape)
+        self.threshold = threshold
         self.tanh_act = nn.Tanh()
-        self.amplitude = amplitude
         
     def forward(self, x):
-        return self.tanh_act(self.model(x)) * self.amplitude
+        return self.tanh_act(self.model(x)) * self.threshold
 
-class qfunc(nn.Module):
+class Qfunc(nn.Module):
     def __init__(self, shape):
-        super(qfunc, self).__init__()
+        super(Qfunc, self).__init__()
         self.model = simple_mlp(shape)
-    
+
     def forward(self, x):
         return self.model(x)
+    
+
+
+
+
+

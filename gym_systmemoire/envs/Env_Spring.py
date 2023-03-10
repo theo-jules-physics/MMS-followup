@@ -9,30 +9,22 @@ from gym_systmemoire.envs import Function
 
 import copy
 
+metadata = {
+    'render.modes': ['human', 'rgb_array'],
+    'video.frames_per_second': 30
+}
 
-class Couplage_n_Env_Spring(gym.Env):
-    """
-        This environment describes a one-dimensional multistable chain composed of coupled bistable spring-mass units.
-        The first spring of the chain is attached to a fixed wall and an external force is applied at the end of the chain.
-        The aim is to put the system in a chosen equilibrium configuration by choosing a sequence of external forces.
-
-    """
-
-    metadata = {
-        'render.modes': ['human', 'rgb_array'],
-        'video.frames_per_second': 30
-    }
-
-    def __init__(self, masse, max_f, system, nb_pos_eq, c, dt, ini_pos=None,
-                 limit_reset=[0.2, 0.1], goal_state=None, recup_traj=True,
+class Couplage_n_Env_Spring(gym.Env):   
+    
+    def __init__(self, masse, max_f, system, c, dt,
+                 limit_reset=[0.2, 0.1], goal_state=None, recup_traj=True, final_state=None,
                  start_from_eq_pos=False, start_with_gaussian_vel=False, add_gaussian_noise_to_ini_pos=False, pos_noise=0.001, vel_noise=0.01,
-                 change_app_point=False, threshold=1000000, cond_success=[0.005, 0.01], reward_sucess=50, pen_coeff=[1, 0.5]):
-        
+                 change_app_point=False, threshold=1000000, cond_success=[0.005, 0.01], reward_success=50, pen_coeff=[1, 0.5]):
+
         self.viewer = None
         self.max_f = max_f
         self.system = system
         self.nb_ressort = np.size(system)
-        self.nb_pos_eq = nb_pos_eq
         self.recup_traj = recup_traj
         self.start_from_eq_pos = start_from_eq_pos
         self.start_with_gaussian_vel = start_with_gaussian_vel
@@ -41,16 +33,16 @@ class Couplage_n_Env_Spring(gym.Env):
         self.vel_noise = vel_noise
         self.change_app_point = change_app_point
         self.threshold = threshold
-        self.reward_sucess = reward_sucess
+        self.reward_success = reward_success
         self.limit_reset = limit_reset
         self.cond_success = cond_success
         self.pen_coeff = pen_coeff
         self.c = c
         self.dt = dt  # 0.1
         self.goal_state = goal_state
-        self.ini_pos = ini_pos
         self.nb_mass_learn = self.nb_ressort
         self.masse = masse
+        self.final_state = final_state
 
         self.x, self.extr_x, self.extr_v, self.k = self.__recup_info_syst()
 
@@ -63,26 +55,85 @@ class Couplage_n_Env_Spring(gym.Env):
         self.action_space = spaces.Box(low=-self.max_f, high=self.max_f, shape=(1,), dtype=np.float32)
         self.observation_space = spaces.Box(low=self.low_state, high=self.high_state, dtype=np.float32)
 
-        self.ep_is_beginning = False
-
         self.state = None
         self.goal = None
-        self.traj_x = None
-        self.traj_v = None
-        self.traj_f = None
-        self.traj_reward = None
-
+        self.traj = dict(positions=[], velocities=[], action=[], reward=[])
         self.reward_episode = []
+        self.reset()
         self.nb_of_steps = 0
-
         
-        self.__seed()
+        
+        self.__seed() 
 
+    def __seed(self, seed=None):
+        """
+        Set the random seed
 
-    ###--------------------------------------------###
-    def __recup_info_syst(self):
+        Parameters
+        ----------
+        seed : int, optional
+            Value of the random seed. The default is None.
 
+        Returns
+        -------
+        seed : int
+            Value of the random seed.
+        """
+
+        self.np_random, seed = seeding.np_random(seed)
+        return seed
+        """
+        Regroup the static data from the springs in the system:
+        Eq. position, Extreme values for positions/velocities, Springs stiffness.
+        
+        Returns
+        -------
+        x : np.array
+            Eq. position for all the springs.
+        extr_x : np.array
+            Extreme values for positions.
+        extr_v : np.array
+            Extreme values for velocities.
+        k : np.array
+            Springs stiffness.
+        """
         x = np.zeros((self.nb_pos_eq, self.nb_ressort))
+        extr_x = np.zeros((2, self.nb_ressort))
+        extr_v = np.zeros((2, self.nb_ressort))
+        k = np.zeros(self.nb_ressort)
+        for i in range(self.nb_ressort):
+            x[:, i] = copy.copy(self.system[i].x_e)
+            extr_x[:, i] = copy.copy(self.system[i].extr_x)
+            extr_v[:, i] = copy.copy(self.system[i].extr_v)
+            k[i] = copy.copy(self.system[i].k)
+        return x, extr_x, extr_v, k
+
+    def __update_traj(self, x, v, f, reward):
+        """
+        Add the state of the system + reward + action to the trajectory.
+        
+        Parameters
+        ----------
+        x : list
+            Positions of the masses.
+        v : list
+            Velocities of the masses.
+        f : float
+            Force applied to the last mass.
+        reward : float
+            Corresponding reward.
+        Returns
+        -------
+        None.
+        """
+        self.traj['positions'].append(x)
+        self.traj['velocities'].append(v)
+        self.traj['action'].append(f)
+        self.traj['reward'].append(reward)
+        
+    def __recup_info_syst(self):
+        nb_pos_eq = len(self.system[0].x_e)
+        x = np.zeros((nb_pos_eq, self.nb_ressort))
         extr_x = np.zeros((2, self.nb_ressort))
         extr_v = np.zeros((2, self.nb_ressort))
         k = np.zeros(self.nb_ressort)
@@ -91,48 +142,65 @@ class Couplage_n_Env_Spring(gym.Env):
             x[:, i] = copy.copy(self.system[i].x_e)
             extr_x[:, i] = copy.copy(self.system[i].extr_x)
             extr_v[:, i] = copy.copy(self.system[i].extr_v)
+            k[i] = copy.copy(self.system[i].k)
 
         return x, extr_x, extr_v, k
-
-    ###--------------------------------------------###
-    def __update_traj(self, x, v, f, reward):
-        x = np.asarray(x)
-        self.traj_x = np.vstack((self.traj_x, x))
-        self.traj_v = np.vstack((self.traj_v, v))
-        self.traj_f.append(f)
-        self.traj_reward.append(reward)
-
-    ###--------------------------------------------###
-    def __update_reward_episode(self, reward):
-        self.reward_episode.append(reward)
-
-    ###--------------------------------------------###
-    def __seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
-
-    ###--------------------------------------------###
+    
     def _get_ob(self):
         s = self.state
         return s[:]
 
-    ###--------------------------------------------###
     def bin_to_pos(self, binstate, eq_pos):
-        if binstate == 0:
-            become = eq_pos[0]
-        else:
-            become = eq_pos[2]
-        return become
+        """
+        Transform the number of the targeted state to a specific equilibrium position.
 
-    ###--------------------------------------------###
+        Parameters
+        ----------
+        binstate : int
+            Number of the targeted stable position.
+        eq_pos : list
+            List of all the equilibrium positions.
+
+        Returns
+        -------
+        Float
+            Equilibrium position for the spring.
+
+        """
+        return eq_pos[int(2*binstate+1)]
+
     def goalbin_to_goalpos(self):
+        """
+        Get the list of positions corresponding to a specified target state.
+
+        Returns
+        -------
+        goalpos : list
+            List of stable positions.
+
+        """
         goalpos = np.zeros_like(self.goal, dtype='float')
         for i in range(self.nb_ressort):
             goalpos[i] = self.bin_to_pos(self.goal[i], self.x[:, i])
         return goalpos
 
-    ###--------------------------------------------###
     def compute_error(self, rel_pos, goalpos):
+        """
+        Compute the absolute difference in positions and velocities between the
+        actual state of the springs and the targeted state.
+
+        Parameters
+        ----------
+        rel_pos : list
+            Relative position of the springs.
+        goalpos : list
+            Targeted positions.
+
+        Returns
+        -------
+        list
+            Absolute error for the positions and the velocities.
+        """
         pos_error = np.zeros(self.nb_ressort)
         vel_error = np.zeros(self.nb_ressort)
         
@@ -142,8 +210,20 @@ class Couplage_n_Env_Spring(gym.Env):
 
         return [pos_error, vel_error]
     
-    ###--------------------------------------------###
     def isterminal(self, errors):
+        """
+        Check if the system reached the end of the epoch by completing the goal
+
+        Parameters
+        ----------
+        errors : list
+            Absolute error for the positions and the velocities.
+
+        Returns
+        -------
+        isterminal : bool
+            Boolean indicating if the goal is accomplished.
+        """
         pos_error, vel_error = errors
         verif_pos = np.zeros(self.nb_mass_learn)
         verif_vel = np.zeros(self.nb_mass_learn)
@@ -151,84 +231,99 @@ class Couplage_n_Env_Spring(gym.Env):
         for i in range(self.nb_mass_learn):
             verif_pos[i] = pos_error[-1-i] < cond_pos
             verif_vel[i] = vel_error[-1-i] < cond_vel
-
         if np.sum(verif_pos + verif_vel) == 2*self.nb_mass_learn:
             isterminal = True
         else:
             isterminal = False
-
         return isterminal
 
-    ###--------------------------------------------###
     def give_reward(self, isterminal, errors):
+        """
+        Get the reward/penalty given an error depending on whether the goal is
+        reached or not.
+
+        Parameters
+        ----------
+        isterminal : bool
+            Boolean indicating if the goal is accomplished..
+        errors : List
+            Absolute error for the positions and the velocities.
+
+        Returns
+        -------
+        reward : float
+            Reward associated to the step computed.
+
+        """
         pos_error, vel_error = errors
-        
         if isterminal:
-            reward = self.reward_sucess
+            reward = self.reward_success
         else:
             c_pos, c_vel = self.pen_coeff
             reward = - c_pos*np.sum(pos_error) - c_vel*np.sum(vel_error)
         return reward
 
-    ###--------------------------------------------###
     def reset(self):
-        self.ep_is_beginning = True
-        if np.size(self.reward_episode) != 0:
-            self.__update_reward_episode(self.traj_reward[-1])
-        if self.ini_pos == None:
-            dx, dv = self.limit_reset
-            x0_relatif = [self.np_random.uniform(low=self.x[0, k], high=self.x[-1, k]+dx) for k in range(self.nb_ressort)]
-            v =[self.np_random.uniform(low=-dv, high=dv) for k in range(self.nb_ressort)]
+        """
+        Reset the system to start a new epoch. This correspond to a reset of the
+        positions and velocities of the masses + setting a new target.
 
+        Returns
+        -------
+        state
+            State of the system.
+
+        """
+        dx, dv = self.limit_reset
+        x_rel, v = [], []
+        for k in range(self.nb_ressort):
+            v.append(self.np_random.uniform(low=-dv, high=dv))
             if self.start_from_eq_pos==True:
-                x0_relatif = np.zeros_like(x0_relatif)
-                for i in range(self.nb_ressort):
-                    x0_relatif[i] = np.random.choice([self.system[i].x_e[0], self.system[i].x_e[2]]) + np.random.normal(scale=self.pos_noise)
-
-            x = np.zeros_like(x0_relatif)
-            cumulative_pos = 0
-            for i in range(self.nb_ressort):
-                x[i] = cumulative_pos + x0_relatif[i]
-                cumulative_pos += x0_relatif[i]
-
-            x_v = np.concatenate((x, v))
-
-        else:
-            x_v = copy.copy(self.ini_pos)
-
-        if self.start_with_gaussian_vel==True:
-            for i in range(self.nb_ressort):
-                x_v[self.nb_ressort + i] = np.random.normal(0., self.vel_noise, 1)[0]
-
-        if self.add_gaussian_noise_to_ini_pos == True:
-            for i in range(self.nb_ressort):
-                x_v[i] = x_v[i] + np.random.normal(scale=self.pos_noise)
-
-
-        self.goal = []        
-        for final_state in self.goal_state:
-            if final_state == None:
-                self.goal.append(random.choice([0, 1]))
+                x_rel.append(np.random.choice(self.system[k].x_s))
             else:
-                self.goal.append(final_state)
+                x_rel.append(self.np_random.uniform(low=self.x[0, k]-dx, high=self.x[-1, k]+dx))
+        x = np.cumsum(x_rel)
+        x_v = np.concatenate((x, v))
+            
+        self.goal = []  
+        if self.final_state == None:
+            for k in range(self.nb_ressort):
+                self.goal.append(random.choice([0, 1]))
+        else:
+            self.goal =self.final_state
 
         self.state = np.concatenate((x_v, self.goal))
 
         if self.recup_traj:
-            self.traj_x = np.asarray(x_v[:self.nb_ressort])
-            self.traj_v = np.asarray(x_v[self.nb_ressort:])
-            self.traj_f = [0]
-            rel_pos = np.diff(np.append(0, self.state[:self.nb_ressort]))
-            errors = self.compute_error(rel_pos, self.goalbin_to_goalpos())
-            self.traj_reward = [self.give_reward(False, errors)]
-            if np.size(self.reward_episode) == 0:
-                self.__update_reward_episode(0)
+            self.traj['positions'] = np.asarray(x)
+            self.traj['velocities'] = np.asarray(v)
+            self.traj['action'] = []
+            errors = self.compute_error(x_rel, self.goalbin_to_goalpos())
+            self.traj['reward'] = [self.give_reward(False, errors)]
 
         return self._get_ob()
-
-    ###--------------------------------------------###
+    
     def step(self, action):
-        ''' n steps in an episode '''
+        """
+        Advance the simulation by one step given an action.
+
+        Parameters
+        ----------
+        action : float
+            Action applied at this step.
+
+        Returns
+        -------
+        state
+            State of the system.
+        reward : float
+            Reward associated with the computed step.
+        done : bool
+            Indicate whether this step is the last from the epoch.
+        dict
+            ???.
+
+        """
 
         self.nb_of_steps += 1
 
@@ -240,7 +335,7 @@ class Couplage_n_Env_Spring(gym.Env):
         s = self.state[: -self.nb_ressort]
         eqd_syst.solve_EQM(force, s, self.dt, n_p=10)
         sol = eqd_syst.X_sol[:, -1]
-        rel_pos = np.diff(np.append(0, sol[:self.nb_ressort]))
+        rel_pos = np.diff(sol[:self.nb_ressort], prepend=0)
         self.state = np.concatenate((sol, self.goal))
 
         goalpos = self.goalbin_to_goalpos()
