@@ -4,7 +4,8 @@ from torch import nn
 def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight)
-        m.bias.data.fill_(0.01)
+        if not m.bias == None:
+            torch.nn.init.zeros_(m.bias)
         
 def simple_mlp(shape, activation=nn.ReLU(), bias=True):
     # Function that produces a FC network with specified sizes (from input to output) and 
@@ -20,9 +21,10 @@ def simple_mlp(shape, activation=nn.ReLU(), bias=True):
     return model
 
 class Policy(nn.Module):
-    def __init__(self, shape, threshold):
+    
+    def __init__(self, model, threshold):
         super(Policy, self).__init__()
-        self.model = simple_mlp(shape)
+        self.model = model
         self.threshold = threshold
         self.tanh_act = nn.Tanh()
         
@@ -30,15 +32,10 @@ class Policy(nn.Module):
         return self.tanh_act(self.model(x)) * self.threshold
 
 class Qfunc(nn.Module):
-    def __init__(self, shape):
-        super(Qfunc, self).__init__()
-        self.model = simple_mlp(shape)
-
-    def forward(self, x):
-        return self.model(x)
     
+    def __init__(self, model):
+        super(Qfunc, self).__init__()
+        self.model = model
 
-
-
-
-
+    def forward(self, obs, act):
+        return self.model(torch.cat([obs, act], dim=-1))

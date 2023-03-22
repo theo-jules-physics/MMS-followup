@@ -1,6 +1,6 @@
 import numpy as np
 import gym_systmemoire.envs.Function
-from gym_systmemoire.envs.Function import Ressort
+from gym_systmemoire.envs.Function import Spring
 
 # max_f : extremal force the system can apply on the last mass (+/- max_f)
 # system : system configuration with the properties of the different springs
@@ -19,34 +19,15 @@ from gym_systmemoire.envs.Function import Ressort
 # pen_coeff : coeff for the penalty for the positions and velocities
 exp = dict()
 
-######### 1 mass ##########
-
-exp['1M-v0'] = {'masse': np.array([1.]), 'max_f': 1, 'system': [Ressort(88.7, [0.05, 0.100, 0.150], [0, 1.5], [-1, 1])],
-                'nb_pos_eq': 3, 'c': 2., 'dt': 0.1, 'ini_pos': None, 'limit_reset': [0.2, 0.1], 'goal_state': [None],
-                'recup_traj': True, 'cond_success': [0.005, 0.01], 'reward_sucess': 50, 'pen_coeff': [1, 0.5]}
-
-
-######### 2 masses ##########
-
-exp['2M-v0'] = {'max_f': 1, 'system': [Ressort(88.7, [0.040, 0.080, 0.100],[0, 1.5], [-1, 1]),
-                                       Ressort(88.7, [0.030, 0.060, 0.105],[0, 1.5], [-1, 1])],
-                'nb_pos_ eq':3, 'c': 2., 'dt': 0.1, 'ini_pos': None, 'limit_reset': [0.2,0.1], 'goal_state': [None, None],
-                'recup_traj': True, 'cond_success': [0.005, 0.01], 'reward_sucess': 50, 'pen_coeff': [1, 0.5]}
-
 ######### 3 masses ##########
 
-exp['3M-v0'] = {'masse': np.array([1., 1., 1.]), 'max_f': 1, 'system': [Ressort(88.7, [0.05, 0.100, 0.150], [0, 1.5], [-1, 1]),
-                                                                        Ressort(88.7, [0.040, 0.080, 0.100],[0, 1.5], [-1, 1]),
-                                                                        Ressort(88.7, [0.030, 0.060, 0.105],[0, 1.5], [-1, 1])],
-                'nb_pos_eq': 3, 'c': 2., 'dt': 0.1, 'ini_pos': None, 'limit_reset': [0.2, 0.1], 'goal_state': [None, None, None],
-                'recup_traj': True, 'cond_success': [0.005, 0.01],  'reward_sucess': 50, 'pen_coeff': [1, 0.5]}
+exp['3M'] = {'masse': np.array([1., 1., 1.]), 'max_f': 1, 'system': [Spring(88.7, [0.05, 0.100, 0.150], [0, 1.5], [-1, 1]),
+                                                                        Spring(88.7, [0.040, 0.080, 0.100],[0, 1.5], [-1, 1]),
+                                                                        Spring(88.7, [0.030, 0.060, 0.105],[0, 1.5], [-1, 1])],
+             'c': 2., 'dt': 0.1, 'limit_reset': [0.2, 0.1], 'goal_state': [None, None, None], 'recup_traj': True,
+             'cond_success': [0.005, 0.01],  'reward_success': 50, 'pen_coeff': [1, 0.5]}
 
-
-######### 4 masses ##########
-
-exp['4M-v0'] = {'masse': np.array([1., 1., 1., 1.]), 'max_f': 1, 'system': [Ressort(88.7, [0.05, 0.100, 0.150], [0, 1.5], [-1, 1]),
-                                       Ressort(88.7, [0.040, 0.080, 0.100],[0, 1.5], [-1, 1]),
-                                       Ressort(88.7, [0.030, 0.060, 0.105],[0, 1.5], [-1, 1]),
-                                       Ressort(88.7, [0.055, 0.110, 0.165],[0, 1.5], [-1, 1])],
-                'nb_pos_eq': 3, 'c': 2., 'dt': 0.1, 'ini_pos': None, 'limit_reset': [0.2, 0.1], 'goal_state': [None, None, None, None],
-                'recup_traj': True, 'cond_success': [0.005, 0.01], 'reward_sucess': 50, 'pen_coeff': [1, 0.5]}
+exp['2M'] = {'masse': np.array([1., 1.]), 'max_f': 1, 'system': [Spring(88.7, [0.05, 0.100, 0.150], [0, 1.5], [-1, 1]),
+                                                                        Spring(88.7, [0.040, 0.080, 0.100],[0, 1.5], [-1, 1])],
+             'c': 2., 'dt': 0.1, 'limit_reset': [0.2, 0.1], 'goal_state': [None, None, None], 'recup_traj': True,
+             'cond_success': [0.005, 0.01],  'reward_success': 50, 'pen_coeff': [1, 0.5]}
