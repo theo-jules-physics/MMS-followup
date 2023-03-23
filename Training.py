@@ -4,11 +4,13 @@ import utils.networks as unet
 import gym
 import gym_systmemoire
 import gym_systmemoire.envs
+import wandb
 
 class Trainer:
     def __init__(self, env, state_dim, action_dim, actor_shape, critic_shape, 
                  actor_lr=1e-4, critic_lr=1e-3, buffer_size=int(1e6), batch_size=128, 
-                 gamma=0.99, tau=1e-3, warmup_steps=int(1e3), device='cpu'):
+                 gamma=0.99, tau=1e-3, warmup_steps=int(2e4), device='cpu',
+                 project_name=None, experiment_name=None):
         self.env = env
         self.action_dim = action_dim
         self.state_dim = state_dim
@@ -28,6 +30,11 @@ class Trainer:
         
         self.ddpg = uage.DDPG(self.actor, self.critic, self.action_dim, buffer_size, batch_size, gamma, tau, actor_lr,
                               critic_lr, warmup_steps, device)
+
+        if project_name is not None and experiment_name is not None:
+            wandb.init(project=project_name, name=experiment_name)
+            wandb.watch([self.actor, self.critic])
+
     
     def train(self, num_episodes=1000, max_steps_per_episode=200):
         for episode in range(num_episodes):
@@ -46,22 +53,26 @@ class Trainer:
 
                 if done:
                     break
-
+                
+            wandb.log({"episode_reward": total_reward})
             print(f"Episode: {episode+1}, Total Reward: {total_reward:.2f}")
 
         self.env.close()
 
 if __name__ == '__main__':
     
-    env_name = 'env-3M'
+    env_name = 'env-2M'
     env = gym.make(env_name)
     assert isinstance(env, gym.wrappers.TimeLimit)
     env = env.env
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
             
-    actor_shape = [state_dim, 64, 64, action_dim]
-    critic_shape = [state_dim + action_dim, 64, 64, 1]
+    actor_shape = [state_dim, 400, 300, action_dim]
+    critic_shape = [state_dim + action_dim, 400, 300, 1]
+    project_name = 'DDPG_bistable_springs'
+    experiment_name = 'test'
     
-    trainer = Trainer(env, state_dim, action_dim, actor_shape, critic_shape)
+    trainer = Trainer(env, state_dim, action_dim, actor_shape, critic_shape, 
+                      project_name=project_name, experiment_name=experiment_name)
     trainer.train()
