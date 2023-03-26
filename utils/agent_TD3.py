@@ -42,9 +42,9 @@ class ReplayBuffer:
         next_states = torch.stack([experience.next_state for experience in batch])
         return states, actions, rewards, dones, next_states
 
-class DDPG:
+class TD3:
     def __init__(self, actor, critic, action_dim, buffer_size=int(1e6), batch_size=128, gamma=0.99, tau=1e-3,
-                 actor_lr=1e-4, critic_lr=1e-3, warmup_steps=int(1e5), device='cpu'):
+                 actor_lr=1e-4, critic_lr=1e-3, policy_noise=0.2, noise_clip=0.5, warmup_steps=int(1e5), device='cpu'):
         
         self.action_dim = action_dim
         self.batch_size = batch_size

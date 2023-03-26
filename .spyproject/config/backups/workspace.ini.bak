@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = empty-project-type
-recent_files = ['utils\\Agent.py', 'Training.py', 'Train_phase.py', 'TESUTO.py', 'gym_systmemoire\\envs\\Function.py', 'Classes.py', 'test_agent.py']
+recent_files = ['Training.py', 'gym_systmemoire\\envs\\Env_Spring.py', 'utils\\agent.py', 'Config_env.py', 'gym_systmemoire\\envs\\Function.py']
 
 [main]
 version = 0.2.0

@@ -25,9 +25,9 @@ exp['3M'] = {'masse': np.array([1., 1., 1.]), 'max_f': 1, 'system': [Spring(88.7
                                                                         Spring(88.7, [0.040, 0.080, 0.100],[0, 1.5], [-1, 1]),
                                                                         Spring(88.7, [0.030, 0.060, 0.105],[0, 1.5], [-1, 1])],
              'c': 2., 'dt': 0.1, 'limit_reset': [0.2, 0.1], 'goal_state': [None, None, None], 'recup_traj': True,
-             'cond_success': [0.005, 0.01],  'reward_success': 50, 'pen_coeff': [1, 0.5]}
+             'cond_success': [0.005, 0.01],  'reward_success': 100, 'pen_coeff': [1, 0.5]}
 
 exp['2M'] = {'masse': np.array([1., 1.]), 'max_f': 1, 'system': [Spring(88.7, [0.05, 0.100, 0.150], [0, 1.5], [-1, 1]),
                                                                         Spring(88.7, [0.040, 0.080, 0.100],[0, 1.5], [-1, 1])],
              'c': 2., 'dt': 0.1, 'limit_reset': [0.2, 0.1], 'goal_state': [None, None, None], 'recup_traj': True,
-             'cond_success': [0.005, 0.01],  'reward_success': 50, 'pen_coeff': [1, 0.5]}
+             'cond_success': [0.005, 0.01],  'reward_success': 100, 'pen_coeff': [1, 0.5]}

@@ -1,3 +1,6 @@
 __pycache__
+utils/__pycache__
+gym_systmemoire/__pycache__
+gym_systmemoire/envs/__pycache__
 .spyproject
 wandb

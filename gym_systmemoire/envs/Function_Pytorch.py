@@ -1,10 +1,8 @@
-import numpy as np
 from numpy import polynomial as poly
-from scipy import integrate
-from torchdiffeq import odeint_adjoint
-import matplotlib.pyplot as plt
+import torch
+from torchdiffeq import odeint
 
-def solve_ODE(func, X0, t_simu):
+def solve_ODE(func, X0, t_simu, device='cpu'):
     """
     Numerically solve the differential equation "func" on an array of time "t_simu"
     for initial conditions "X0". Returns the matrix "sol".
@@ -23,17 +21,14 @@ def solve_ODE(func, X0, t_simu):
     sol : ndarray
         Solution matrix.
     """
-    X0 = np.asarray(X0)
-    solver = integrate.ode(func).set_integrator('dopri5')
-    solver.set_initial_value(X0)
-    sol = np.zeros((len(t_simu), len(X0)))
-    for ind in range(len(sol)):
-        sol[ind, :] = solver.integrate(t_simu[ind])
+    X0 = torch.as_tensor(X0, device=device, dtype=torch.float64)
+    t = torch.as_tensor(t_simu, device=device, dtype=torch.float64)
+    sol = odeint(func, X0, t)
     return sol
 
 class Spring():
     
-    def __init__(self, k, x_e, extr_x, extr_v):
+    def __init__(self, k, x_e, extr_x, extr_v, device='cpu'):
         """
         Initialize a Spring object.
         
@@ -49,14 +44,16 @@ class Spring():
             Extremal velocities.
         """
         self.k = k
-        self.x_e = np.asarray(x_e)
-        self.__get_x_s()
-        self.extr_x = np.asarray(extr_x)
-        self.extr_v = np.asarray(extr_v)
+        self.device = device
+        self.x_e = torch.as_tensor(x_e, device=self.device)
+        self._get_x_s()
+        self.extr_x = torch.as_tensor(extr_x, device=self.device)
+        self.extr_v = torch.as_tensor(extr_v, device=self.device)    
         self.coeff = poly.polynomial.polyfromroots(x_e)
         self.polyn_force = poly.polynomial.Polynomial(self.coeff)
         
-    def __get_x_s(self):
+        
+    def _get_x_s(self):
         nb_pos_stable = 1 + int((len(self.x_e)-1)/2)
         self.x_s = [self.x_e[2*k] for k in range(nb_pos_stable)]
 
@@ -112,7 +109,8 @@ class ODE_mouvement():
         Array of simulation times.
     """
 
-    def __init__(self, springs, masse, c_frot, nb_of_steps=None, threshold=None):
+    def __init__(self, springs, masse, c_frot, nb_of_steps=None, threshold=None,
+                 device='cpu'):
         """Initialize the EQD_mouvement class with given parameters.
 
         Parameters
@@ -123,20 +121,15 @@ class ODE_mouvement():
             List of masses between the springs.
         c_frot : array_like
             List of friction coefficients for every mass.
-        nb_of_steps : int, optional
-            Number of steps for the numerical solver.
-        threshold : float, optional
-            Threshold value for convergence in the solver.
         """
         self.springs = springs
-        self.masse = np.asarray(masse)
-        self.c_frot = np.asarray(c_frot)
-        self.nb_of_steps = nb_of_steps
-        self.threshold = threshold
+        self.device = device
+        self.masse = torch.as_tensor(masse, device=self.device)
+        self.c_frot = torch.as_tensor(c_frot, device=self.device)
         self.n = len(masse)
         self.X_sol = None
         self.t_sol = None
-
+    
     def force_comp(self, x, force):
         """Compute the forces F of the springs for masses at position x.
 
@@ -154,9 +147,9 @@ class ODE_mouvement():
         DF : ndarray
             Array of force differences.
         """
-        dx = np.diff(np.append(0, x))
-        F = np.asarray([self.springs[k].force(dx[k]) for k in range(len(dx))])
-        DF = np.append(-np.diff(F), force + F[-1])
+        dx = torch.diff(torch.cat([torch.tensor([0], device=self.device), x]))
+        F = torch.stack([self.springs[k].force(dx[k]) for k in range(len(dx))])
+        DF = torch.cat((-torch.diff(F), (force + F[-1]).reshape(1)))
         return F, DF
 
     def get_diss_arg(self, v):
@@ -172,9 +165,9 @@ class ODE_mouvement():
         diss_arg : ndarray
             Array of friction term values.
         """
-        elogations_vel = np.diff(np.append(0, v))
-        diss_arg = np.diff(elogations_vel)
-        diss_arg = np.append(-diss_arg, elogations_vel[-1])
+        elogations_vel = torch.diff(torch.cat([torch.tensor([0], device=self.device), v]))
+        diss_arg = torch.diff(elogations_vel)
+        diss_arg = torch.cat((-diss_arg, elogations_vel[-1].unsqueeze(0)), dim=0)
         return diss_arg
 
     def solve_ODE(self, force, X0, t_max, n_p=1000):
@@ -192,13 +185,13 @@ class ODE_mouvement():
         n_p : int, optional
             Number of time points, default is 1000.
         """
-        self.t_sol = np.linspace(0, t_max, n_p)
+        self.t_sol = torch.linspace(0, t_max, n_p, device=self.device)
 
         def ODE(t, X):
             x = X[:self.n]
             v = X[self.n:]
             _, DF = self.force_comp(x, force)
             dv = 1 / self.masse * (DF - self.c_frot * v)
-            return np.append(v, dv)
+            return torch.cat((v, dv), dim=0)
 
-        self.X_sol = np.transpose(solve_ODE(ODE, X0, self.t_sol))
+        self.X_sol = torch.transpose(solve_ODE(ODE, X0, self.t_sol, device=self.device), 0, 1)

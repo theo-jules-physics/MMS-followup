@@ -254,7 +254,7 @@ class Couplage_n_Env_Spring(gym.Env):
                                           self.nb_of_steps, self.threshold)
 
         s = self.state[: -self.nb_springs]
-        eqd_syst.solve_ODE(force, s, self.dt, n_p=3)
+        eqd_syst.solve_ODE(force, s, self.dt, n_p=10)
         sol = eqd_syst.X_sol[:, -1]
         rel_pos = np.diff(sol[:self.nb_springs], prepend=0)
         self.state = np.concatenate((sol, self.goal))

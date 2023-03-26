@@ -1,8 +1,6 @@
-import math
-import numpy as np
+import torch
 import gym
 from gym import spaces
-from gym.utils import seeding
 import random
 
 from gym_systmemoire.envs import Function
@@ -14,11 +12,12 @@ class Couplage_n_Env_Spring(gym.Env):
     def __init__(self, masse, max_f, system, c, dt, limit_reset=[0.2, 0.1], 
                  goal_state=None, recup_traj=True, final_state=None,
                  start_from_eq_pos=False, threshold=1000000, cond_success=[0.005, 0.01],
-                 reward_success=50, pen_coeff=[1, 0.5]):
+                 reward_success=50, pen_coeff=[1, 0.5], device='cpu'):
 
+        self.device = device
         self.max_f = max_f
         self.system = system
-        self.nb_springs = np.size(system)
+        self.nb_springs = len(system)
         self.recup_traj = recup_traj
         self.start_from_eq_pos = start_from_eq_pos
         self.threshold = threshold
@@ -34,14 +33,12 @@ class Couplage_n_Env_Spring(gym.Env):
 
         self.x, self.extr_x, self.extr_v, self.k = self.__recup_info_syst()
 
-        self.low_state = np.concatenate((self.extr_x[0, :],
-                                         self.extr_v[0, :],
-                                         [0 for k in range(self.nb_springs)])).astype(np.float32)
-        self.high_state = np.concatenate((self.extr_x[1, :],
-                                          self.extr_v[1, :],
-                                          [1 for k in range(self.nb_springs)])).astype(np.float32)
-        self.action_space = spaces.Box(low=-self.max_f, high=self.max_f, shape=(1,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=self.low_state, high=self.high_state, dtype=np.float32)
+        self.low_state = torch.cat((self.extr_x[0, :], self.extr_v[0, :], 
+                                    torch.zeros(self.nb_springs, device=self.device)))
+        self.high_state = torch.cat((self.extr_x[1, :], self.extr_v[1, :],
+                                     torch.zeros(self.nb_springs, device=self.device)))
+        self.action_space = spaces.Box(low=-self.max_f, high=self.max_f, shape=(1,))
+        self.observation_space = spaces.Box(low=self.low_state.cpu().numpy(), high=self.high_state.cpu().numpy())
 
         self.state = None
         self.goal = None
@@ -75,10 +72,10 @@ class Couplage_n_Env_Spring(gym.Env):
         
     def __recup_info_syst(self):
         nb_pos_eq = len(self.system[0].x_e)
-        x = np.zeros((nb_pos_eq, self.nb_springs))
-        extr_x = np.zeros((2, self.nb_springs))
-        extr_v = np.zeros((2, self.nb_springs))
-        k = np.zeros(self.nb_springs)
+        x = torch.zeros((nb_pos_eq, self.nb_springs), device=self.device)
+        extr_x = torch.zeros((2, self.nb_springs), device=self.device)
+        extr_v = torch.zeros((2, self.nb_springs), device=self.device)
+        k = torch.zeros(self.nb_springs, device=self.device)
 
         for i in range(self.nb_springs):
             x[:, i] = copy.copy(self.system[i].x_e)
@@ -102,7 +99,7 @@ class Couplage_n_Env_Spring(gym.Env):
             List of stable positions.
 
         """
-        goalpos = np.zeros_like(self.goal, dtype='float')
+        goalpos = torch.zeros_like(self.goal, device=self.device)
         for i in range(self.nb_springs):
             goalpos[i] = self.system[i].x_s[self.goal[i]]
         return goalpos
@@ -124,12 +121,12 @@ class Couplage_n_Env_Spring(gym.Env):
         list
             Absolute error for the positions and the velocities.
         """
-        pos_error = np.zeros(self.nb_springs)
-        vel_error = np.zeros(self.nb_springs)
+        pos_error = torch.zeros(self.nb_springs, device=self.device)
+        vel_error = torch.zeros(self.nb_springs, device=self.device)
         
         for i in range(self.nb_springs):
-            pos_error[i] = np.abs(rel_pos[i] - goalpos[i])
-            vel_error[i] = np.abs(self.state[self.nb_springs + i])
+            pos_error[i] = torch.abs(rel_pos[i] - goalpos[i])
+            vel_error[i] = torch.abs(self.state[self.nb_springs + i])
 
         return [pos_error, vel_error]
     
@@ -148,13 +145,13 @@ class Couplage_n_Env_Spring(gym.Env):
             Boolean indicating if the goal is accomplished.
         """
         pos_error, vel_error = errors
-        verif_pos = np.zeros(self.nb_springs)
-        verif_vel = np.zeros(self.nb_springs)
+        verif_pos = torch.zeros(self.nb_springs, device=self.device)
+        verif_vel = torch.zeros(self.nb_springs, device=self.device)
         cond_pos, cond_vel = self.cond_success
         for i in range(self.nb_springs):
             verif_pos[i] = pos_error[-1-i] < cond_pos
             verif_vel[i] = vel_error[-1-i] < cond_vel
-        if np.sum(verif_pos + verif_vel) == 2*self.nb_springs:
+        if torch.sum(verif_pos + verif_vel) == 2*self.nb_springs:
             isterminal = True
         else:
             isterminal = False
@@ -183,7 +180,7 @@ class Couplage_n_Env_Spring(gym.Env):
             reward = self.reward_success
         else:
             c_pos, c_vel = self.pen_coeff
-            reward = - c_pos*np.sum(pos_error) - c_vel*np.sum(vel_error)
+            reward = - c_pos*torch.sum(pos_error) - c_vel*torch.sum(vel_error)
         return reward
 
     def reset(self):
@@ -201,12 +198,10 @@ class Couplage_n_Env_Spring(gym.Env):
         x_rel, v = [], []
         for k in range(self.nb_springs):
             v.append(self.np_random.uniform(low=-dv, high=dv))
-            if self.start_from_eq_pos==True:
-                x_rel.append(np.random.choice(self.system[k].x_s))
-            else:
-                x_rel.append(self.np_random.uniform(low=self.x[0, k]-dx, high=self.x[-1, k]+dx))
-        x = np.cumsum(x_rel)
-        x_v = np.concatenate((x, v))
+            x_min , x_max = self.x[0, k]-dx, self.x[-1, k]+dx
+            x_rel.append(x_min + torch.rand(1, device=self.device)*(x_max-x_min))
+        x = torch.cumsum(torch.as_tensor(x_rel, device=self.device), 0)
+        x_v = torch.cat((x, torch.as_tensor(v, device=self.device)))
             
         self.goal = []  
         if self.final_state == None:
@@ -214,8 +209,8 @@ class Couplage_n_Env_Spring(gym.Env):
                 self.goal.append(random.choice([0, 1]))
         else:
             self.goal =self.final_state
-
-        self.state = np.concatenate((x_v, self.goal))
+        self.goal = torch.as_tensor(self.goal, device=self.device)
+        self.state = torch.cat((x_v, self.goal))
 
         if self.recup_traj:
             errors = self.compute_error(x_rel, self.goalbin_to_goalpos())
@@ -250,14 +245,14 @@ class Couplage_n_Env_Spring(gym.Env):
 
         force = min(max(action[0], -self.max_f), self.max_f)
 
-        eqd_syst = Function.ODE_mouvement(self.system, self.masse, self.c * np.ones(self.nb_springs),
-                                          self.nb_of_steps, self.threshold)
+        eqd_syst = Function.ODE_mouvement(self.system, self.masse, self.c * torch.ones(self.nb_springs, device=self.device),
+                                          self.nb_of_steps, self.threshold, device=self.device)
 
         s = self.state[: -self.nb_springs]
-        eqd_syst.solve_ODE(force, s, self.dt, n_p=3)
+        eqd_syst.solve_ODE(force, s, self.dt, n_p=10)
         sol = eqd_syst.X_sol[:, -1]
-        rel_pos = np.diff(sol[:self.nb_springs], prepend=0)
-        self.state = np.concatenate((sol, self.goal))
+        rel_pos = torch.diff(sol[:self.nb_springs], prepend=torch.tensor(0, device=self.device).reshape(1))
+        self.state = torch.cat((sol, self.goal))
 
         goalpos = self.goalbin_to_goalpos()
         errors = self.compute_error(rel_pos, goalpos)
